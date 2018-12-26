@@ -1,21 +1,22 @@
 {
-  "name": "kirin-core",
+  "name": "hypervault",
   "version": "1.0.0",
-  "description": "Decentralized Private Persona on top of hyper-core",
+  "description": "decentralized least-authority personal storage",
   "main": "index.js",
   "scripts": {
     "test": "tape test/*",
     "debug": "DEBUG=* node inspect $(npm bin)/tape test/*"
   },
   "keywords": [
-    "hyper-core",
+    "hyperdrive",
     "decentralized",
     "decent",
     "private",
+    "storage",
     "encryption"
   ],
   "author": "Tony Ivanov (info@tonyivanov.se)",
-  "license": "ISC",
+  "license": "AGPL-3.0-or-later",
   "dependencies": {
     "buffer-alloc-unsafe": "^1.1.0",
     "dat-storage": "^1.1.1",
@@ -28,7 +29,6 @@
     "xtend": "^4.0.1"
   },
   "devDependencies": {
-    "hexer": "^1.5.0",
     "random-access-memory": "^3.1.1",
     "rimraf": "^2.6.2",
     "tap-spec": "^5.0.0",
