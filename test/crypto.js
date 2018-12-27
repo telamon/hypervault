@@ -1,7 +1,7 @@
 var test = require('tape')
 var bufferFrom = require('buffer-from')
 var debug = require('debug')('kirin-core/test')
-var kirinCrypto = require('../crypto')
+var kirinCrypto = require('../lib/crypto')
 
 test.createStream()
   .pipe(require('tap-spec')())

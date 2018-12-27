@@ -21,7 +21,7 @@ const multifeed = require('multifeed')
 const sigrid = require('../multifeed-sigrid') // # TODO: publish to npm.
 const assert = require('assert')
 const hyperdrive = require('hyperdrive')
-const krypto = require('./crypto')
+const krypto = require('./lib/crypto')
 const raf = require('random-access-file')
 const datstore = require('dat-storage')
 const path = require('path')
@@ -40,18 +40,17 @@ function HyperVault(key, repo, secret, opts) {
   if(!(this instanceof HyperVault)) return new HyperVault(key, repo, secret, opts)
 
   if (typeof secret === 'object' && !Buffer.isBuffer(secret)) {opts = secret; secret = null}
-  let self = this
-  self.opts = opts || {}
+  this.opts = opts || {}
 
-  //self.deviceId = self.opts.deviceId || crypto.randomBytes(4).readUInt32BE()
-  self.key = key
-  self.canWrite = !!secret
-  self.secret = secret
+  //this.deviceId = this.opts.deviceId || crypto.randomBytes(4).readUInt32BE()
+  this.key = key
+  this.canWrite = !!secret
+  this.secret = secret
 
-  self.repo = repo || '.'
-  self.bare = !!self.opts.bare
-  self.metaDir = '.puzzlebox'
-
+  this.repo = repo || '.'
+  this.bare = !!this.opts.bare
+  this.metaDir = '.hypervault'
+  const self = this
   const storage = (target) => {
     let fullPath = path.join(self.repo, self.metaDir, target)
     if (self.bare) fullPath = path.join(self.repo, target)
@@ -60,9 +59,27 @@ function HyperVault(key, repo, secret, opts) {
     else throw new Error('Optional storage was passed but only random-access is supported now')
   }
 
-  self.sig = sigrid(self.key, storage, self.secret)
-  self.multi = multifeed(hyperdrive, storage)
-  self.multi.use(self.sig)
+  this.sig = sigrid(this.key, storage, this.secret)
+  this.multi = multifeed(hyperdrive, storage)
+  this.multi.use(this.sig)
+  this.ready(() => {
+    debug('vault initialized')
+  })
+}
+
+HyperVault.prototype.replicate = function (opts) {
+  return this.multi.replicate(opts)
+}
+
+HyperVault.prototype.ready = function(cb) {
+  this.multi.ready(() => {
+    if (this.canWrite) this.multi.writer('local', (err, writer) => {
+      if (err) return cb(err)
+      this._local = writer
+      cb(null)
+    })
+    else cb()
+  })
 }
 
 /** combines all hyperdrives into a virtual tree
@@ -118,24 +135,24 @@ HyperVault.prototype.indexView = function(done) {
   nextFeed(0)
 }
 
-HyperVault.prototype.ready = function(cb) {
-  this.multi.ready(() => {
-    if (this.canWrite) this.multi.writer('local', (err, writer) => {
-      if (err) return cb(err)
-      this._local = writer
-      cb(null)
-    })
-    else cb()
-  })
+HyperVault.prototype.hyperTime = function () {
+  const feeds = this.multi.feeds()
+  return feeds.map((archive) => {
+    return [a2k(archive), archive.version].join(':')
+  }).sort()
+
+  function a2k (archive) {
+    const id = archive.discoveryKey.toString('hex')
+    return id.substr(0,8) //TODO: this is a disaster waiting to happen. fix before production.
+  }
 }
 
-
-HyperVault.prototype.replicate = function (opts) {
-  return this.multi.replicate(opts)
-}
 
 HyperVault.prototype.writeFile = function (name, data, callback) {
-  this._local.writeFile(name, data, callback)
+  this._local.writeFile(name, data, err => {
+    if (err) callback(err)
+    else callback(null, this.hyperTime())
+  })
 }
 
 /*
@@ -179,6 +196,7 @@ HyperVault.prototype.reflect = function(cb) {
         }
 
         debug('REFLECT:', action.toUpperCase(), '\t\t', file)
+        changeLog[file] = action
 
         // Import if needed TODO: stop importing deleted entries.
         if (action === 'import' && this.canWrite) {
@@ -199,8 +217,6 @@ HyperVault.prototype.reflect = function(cb) {
 
         // No op
         if (action === 'nop') nextEntry(i + 1)
-
-        changeLog[file] = action
       } // end of nextEntry()
       nextEntry(0)
     })

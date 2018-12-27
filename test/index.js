@@ -4,8 +4,9 @@ const pump = require('pump')
 const fs = require('fs')
 const rm = require('rimraf')
 const path = require('path')
+const RAM = require('random-access-memory')
 
-test('folder indexer', async function(t) {
+test('folder indexer',function(t) {
   t.plan(3)
   HyperVault._indexFolder('node_modules/', (err, index) => {
     t.error(err)
@@ -13,6 +14,83 @@ test('folder indexer', async function(t) {
     t.ok(entry)
     t.ok(typeof entry.mtime, 'number')
   })
+})
+
+test.only('distributed clocks & changes', (t) => {
+  t.plan(26)
+
+  setupVaults((vaults) => {
+    const [v1, v2, v3] = vaults
+    t.deepEqual(v2.hyperTime(), v3.hyperTime())
+    v2.indexView((err, tree) => {
+      // v3's shared.txt was created last, thus v3 should be owner of current shared.txt
+      const sharedOwner = v2.multi.feeds().find(f => f.name === tree['/shared.txt'].feed)
+      t.equal(sharedOwner.key.toString('hex'), v3._local.key.toString('hex'))
+      // v2 creates a new file and replicates with v1
+      v2.writeFile(`frog.txt`, Buffer.from('amphibian'), (err, timestamp) => {
+        t.error(err)
+        replicate(v1, v2, err => {
+          v1.indexView((err, tree) => {
+            t.error(err)
+            t.equal(tree['/frog.txt'].feed, '1')
+            t.equal(tree['/shared.txt'].feed, '2')
+            // TODO: this test is incomplete; current indexView() uses
+            // mtime and completley ignores conflicts by just picking the highest valued mtime.
+            // pretty stupid sytem, In order to get better control, we'll at least need to be able to
+            // store a custom timestamp on hyperdrive's "append-tree". like archive.writeFile(name,bin, {vectime: [...]})
+            // causing key `vectime` to be persisted in the stat-meta as a sibling to atime/mtime. That way we could
+            // do a bit higher level conflict control by tracking if a change is made on top of the latest state or
+            // if it was made entierly unaware of a previous state. I still have suggestion what to do once such
+            // conflict is detected. Gonna drop this path for now and experiment a bit with mafintosh/fuse lib.
+          })
+        })
+      })
+    })
+  })
+
+  function replicate(a,b, cb) {
+    let stream = a.replicate()
+    pump(stream, b.replicate(), stream, cb)
+  }
+
+  function setupVaults(cb) {
+    spawnVault(v1 => {
+      spawnVault(v2 => {
+        spawnVault(v3 => {
+          // replicate v1 with v2
+            replicate(v1, v2, err => {
+            t.error(err)
+            replicate(v2, v3, err => {
+              t.error(err)
+              // return initialized vaults preloaded with a shared and an individual file
+              // v1 and v2 are only aware of eachother, while v2 and v3 are aware of all known archives.
+              cb([v1, v2, v3])
+            })
+          })
+        })
+      })
+    })
+  }
+
+  function spawnVault(done) {
+    const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
+    const vault = new HyperVault(pair.publicKey, null, pair.secretKey, {bare: true, storage: RAM})
+
+    vault.ready((err) => {
+      t.error(err)
+      const alias = vault._local.discoveryKey.toString('hex').substr(0, 8)
+      vault.writeFile(`individual_${alias}.txt`, Buffer.from(alias), (err, timestamp) => {
+        t.error(err)
+        t.equal(Array.isArray(timestamp), true)
+        t.equal(timestamp.length, 1)
+        vault.writeFile('shared.txt', Buffer.from(alias), (err, timestamp) => {
+          t.error(err)
+          t.equal(Array.isArray(timestamp), true)
+          done(vault)
+        })
+      })
+    })
+  }
 })
 
 test('Reflection', function(t) {
