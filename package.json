@@ -26,6 +26,7 @@
     "multifeed": "file:../multifeed",
     "multifeed-sigrid": "file:../multifeed-sigrid",
     "sodium-universal": "^2.0.0",
+    "unixify": "^1.0.0",
     "xtend": "^4.0.1"
   },
   "devDependencies": {

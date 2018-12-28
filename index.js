@@ -27,7 +27,7 @@ const datstore = require('dat-storage')
 const path = require('path')
 const fs = require('fs')
 const pump = require('pump')
-
+const unixify = require('unixify')
 // Export class and methods
 module.exports = HyperVault
 
@@ -50,6 +50,7 @@ function HyperVault(key, repo, secret, opts) {
   this.repo = repo || '.'
   this.bare = !!this.opts.bare
   this.metaDir = '.hypervault'
+
   const self = this
   const storage = (target) => {
     let fullPath = path.join(self.repo, self.metaDir, target)
@@ -89,40 +90,23 @@ HyperVault.prototype.indexView = function(done) {
   const feeds = this.multi.feeds()
   const tree = {}
 
-  const nextFeed = (i) => {
-    if (i >= feeds.length) return done(null, tree)
-    const archive = feeds[i]
-    const stream = archive.history()
-    const entryHandler = entry => {
-      let file = entry.name
-      let s = {
-        feed: archive.name,
-        mtime: entry.value.mtime,
-        version: entry.version
-      }
+  // Step 1. Collect all events from all hyperdrive trees into
+  // a multiverse of possibilities
 
-      // TODO: don't use mtime for age-checks
-      // Vector-clocks are ineffective when total amount of id's is unknown.
-      // Consider ITCs, (Interval Tree Clocks)
-      // Note on security, all timestamps generated at remote peers can be
-      // considered insecure. Just like it's very easy to forge an
-      // mtime-timestamp to insert an entry at a random point of history or the
-      // future
-      if (entry.type === 'put') {
-        if (!tree[file]) { // tree does not contain file previously
-          tree[file] = s
-        } else if (tree[file].mtime < s.mtime){ // Update tree with newer version of file
-          tree[file] = s
-        }
-      } else {
-        debugger // TODO: not yet tested.
-        // Delete file from tree if the delete op is considered 'newer'
-        if (tree[file] && tree[file].mtime < s.mtime) {
-          // TODO: this does not solve deletion when 'reflecting', it might just
-          // cause another import.
-          delete tree[file]
-        }
-      }
+  const nextFeed = (i) => { // feed-iterator
+    // Call merge() when all feeds are processed.
+    if (i >= feeds.length) return merge()
+
+    const archive = feeds[i]
+    const feedKey = archive.key.toString('hex')
+    const stream = archive.history()
+
+    const entryHandler = entry => {
+      const file = entry.name
+      if(!tree[file]) tree[file] = []
+
+      tree[file].push(Object.assign({}, entry, {source: feedKey}))
+
     } // end of entryHandler
 
     stream.on('data', entryHandler)
@@ -132,7 +116,42 @@ HyperVault.prototype.indexView = function(done) {
       nextFeed(i + 1)
     })
   }
-  nextFeed(0)
+  nextFeed(0) // Start the loop
+
+  // Step 2. process eventual consistency
+  const merge = () => {
+    const current = {}
+
+    Object.keys(tree).forEach(file => {
+      const entries = tree[file]
+      // Dummy merge
+      let dummy = entries.filter(e => e.type === 'put').sort((a, b) => b.value.mtime - a.value.mtime)
+      if (dummy.length) current[file] = dummy[0]
+    })
+    done(null, current)
+      /*
+      if (entry.type === 'put') {
+        let stat = {
+          feed: archive.name,
+          mtime: entry.value.mtime,
+          version: entry.version
+        }
+
+        if (!tree[file]) { // tree does not contain file previously
+          tree[file] = stat
+        } else if (tree[file].mtime < stat.mtime){ // Update tree with newer version of file
+          tree[file] = stat
+        }
+      } else (entry.type == 'del') {
+        debugger // TODO: not yet tested.
+        // Delete file from tree if the delete op is considered 'newer'
+        if (tree[file] && tree[file].mtime < stat.mtime) {
+          // TODO: this does not solve deletion when 'reflecting', it might just
+          // cause another import.
+          delete tree[file]
+        }
+      }*/
+  }
 }
 
 HyperVault.prototype.hyperTime = function () {
@@ -147,13 +166,6 @@ HyperVault.prototype.hyperTime = function () {
   }
 }
 
-
-HyperVault.prototype.writeFile = function (name, data, callback) {
-  this._local.writeFile(name, data, err => {
-    if (err) callback(err)
-    else callback(null, this.hyperTime())
-  })
-}
 
 /*
  * Reflects the combined hyperdrive view to disk and vice-versa
@@ -348,5 +360,48 @@ function p(cb) {
       if (err) reject(err)
       else resolve(p.length < 2 ? p[0] : p)
     })
+  })
+}
+
+
+/** fs API proxies **/
+
+/** uses indexView + entry.source to locate the archive mentioned by the tree.
+ * todo: accept opts with timestamp to read tree at different versions.
+ */
+HyperVault.prototype._archiveOf = function (name, callback) {
+  this.indexView((err, tree) => {
+    name = unixify(name)
+    if (name[0] !== '/') name = '/' + name
+    let entry = tree[name]
+    if (!entry) return callback(new Error('file not found, TODO: create a real ENOENT err'))
+    const archive = this.multi.feeds().find(arch => arch.key.toString('hex') === entry.source)
+    if (!archive) return callback(new Error(`Archive ${entry.source} not available`))
+    callback(null, archive)
+  })
+}
+
+HyperVault.prototype.writeFile = function (name, data, callback) {
+  this._local.writeFile(name, data, err => {
+    if (err) callback(err)
+    else callback(null, this.hyperTime())
+  })
+}
+
+HyperVault.prototype.unlink = function (name, callback) {
+  this._local.unlink(name, callback)
+}
+
+HyperVault.prototype.readFile = function (name, callback) {
+  this._archiveOf(name, (err, archive) => {
+    if (err) callback(err)
+    else archive.readFile(name, callback)
+  })
+}
+
+HyperVault.prototype.createReadStream = function (name, callback) {
+  this._archiveOf(name, (err, archive) => {
+    if (err) callback(err)
+    else archive.createReadStream(name, callback)
   })
 }

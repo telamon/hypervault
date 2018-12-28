@@ -17,31 +17,41 @@ test('folder indexer',function(t) {
 })
 
 test.only('distributed clocks & changes', (t) => {
-  t.plan(26)
+  t.plan(40)
 
   setupVaults((vaults) => {
     const [v1, v2, v3] = vaults
     t.deepEqual(v2.hyperTime(), v3.hyperTime())
     v2.indexView((err, tree) => {
       // v3's shared.txt was created last, thus v3 should be owner of current shared.txt
-      const sharedOwner = v2.multi.feeds().find(f => f.name === tree['/shared.txt'].feed)
+      const sharedOwner = v2.multi.feeds().find(f => f.key.toString('hex') === tree['/shared.txt'].source)
       t.equal(sharedOwner.key.toString('hex'), v3._local.key.toString('hex'))
       // v2 creates a new file and replicates with v1
       v2.writeFile(`frog.txt`, Buffer.from('amphibian'), (err, timestamp) => {
         t.error(err)
         replicate(v1, v2, err => {
-          v1.indexView((err, tree) => {
-            t.error(err)
-            t.equal(tree['/frog.txt'].feed, '1')
-            t.equal(tree['/shared.txt'].feed, '2')
-            // TODO: this test is incomplete; current indexView() uses
-            // mtime and completley ignores conflicts by just picking the highest valued mtime.
-            // pretty stupid sytem, In order to get better control, we'll at least need to be able to
-            // store a custom timestamp on hyperdrive's "append-tree". like archive.writeFile(name,bin, {vectime: [...]})
-            // causing key `vectime` to be persisted in the stat-meta as a sibling to atime/mtime. That way we could
-            // do a bit higher level conflict control by tracking if a change is made on top of the latest state or
-            // if it was made entierly unaware of a previous state. I still have suggestion what to do once such
-            // conflict is detected. Gonna drop this path for now and experiment a bit with mafintosh/fuse lib.
+          t.error(err)
+          // v2 updates the file
+          v2.writeFile('frog.txt', Buffer.from('amphibians have mucus glands'), (err) => {
+            // v2 also deletes something cause I want see what delete looks like.
+            v2.unlink('shared.txt', err => {
+              t.error(err)
+              // v1 updates the file.
+              v1.writeFile('frog.txt', Buffer.from('toads'), (err) => {
+                t.error(err)
+                // v1 and v2 replicate
+                replicate(v1, v2, err => {
+                  t.error(err)
+                  v1.indexView((err, tree) => {
+                    t.error(err)
+                    v2.readFile('frog.txt', (err, chunk) => {
+                      t.error(err)
+                      t.equal(chunk.toString('utf8'), 'toads') // Last write rule wins
+                    })
+                  })
+                })
+              })
+            })
           })
         })
       })
@@ -79,6 +89,7 @@ test.only('distributed clocks & changes', (t) => {
     vault.ready((err) => {
       t.error(err)
       const alias = vault._local.discoveryKey.toString('hex').substr(0, 8)
+      vault._alias = alias // let's attach a small tag to each vault for easier testing.
       vault.writeFile(`individual_${alias}.txt`, Buffer.from(alias), (err, timestamp) => {
         t.error(err)
         t.equal(Array.isArray(timestamp), true)
