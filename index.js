@@ -20,14 +20,15 @@ const debug = require('debug')('hypervault')
 const multifeed = require('multifeed')
 const sigrid = require('../multifeed-sigrid') // # TODO: publish to npm.
 const assert = require('assert')
-const hyperdrive = require('hyperdrive')
+const hyperdrive = require('../hyperdrive')
 const krypto = require('./lib/crypto')
 const raf = require('random-access-file')
 const datstore = require('dat-storage')
 const path = require('path')
 const fs = require('fs')
 const pump = require('pump')
-const unixify = require('unixify')
+const Automerge = require('automerge')
+
 // Export class and methods
 module.exports = HyperVault
 
@@ -42,14 +43,17 @@ function HyperVault(key, repo, secret, opts) {
   if (typeof secret === 'object' && !Buffer.isBuffer(secret)) {opts = secret; secret = null}
   this.opts = opts || {}
 
-  //this.deviceId = this.opts.deviceId || crypto.randomBytes(4).readUInt32BE()
+  // Assign secrets; TODO: would like to garbage collect them asap.
   this.key = key
   this.canWrite = !!secret
   this.secret = secret
+  //this.deviceId = this.opts.deviceId || crypto.randomBytes(4).readUInt32BE()
 
+  // Figure out what kind of repository we're dealing with.
   this.repo = repo || '.'
   this.bare = !!this.opts.bare
   this.metaDir = '.hypervault'
+
 
   const self = this
   const storage = (target) => {
@@ -59,10 +63,16 @@ function HyperVault(key, repo, secret, opts) {
     else if (!self.opts.storage) return raf(fullPath)
     else throw new Error('Optional storage was passed but only random-access is supported now')
   }
-
+  // Initialize multifeed + sigrid
   this.sig = sigrid(this.key, storage, this.secret)
-  this.multi = multifeed(hyperdrive, storage)
+  this.multi = multifeed(hyperdrive, storage, {
+    checkout: {}
+  })
   this.multi.use(this.sig)
+
+  // Initialize automerge
+  this.merge = Automerge.init()
+
   this.ready(() => {
     debug('vault initialized')
   })
@@ -346,7 +356,7 @@ function _indexFolder(arch, dir, cb) {
 module.exports._indexFolder = _indexFolder
 
 // A quick'n'dirty way to wrap es5 callback style methods
-// inside a promise without having to 'promisify' every call
+// inside a promise without having to 'promisify' every function individually
 // usage:
 // p(done => {
 //  doSomething(err => {
@@ -358,6 +368,8 @@ function p(cb) {
   return new Promise(function(resolve, reject) {
     cb(function (err, ...p) {
       if (err) reject(err)
+      // If our cb was called with a single parameter
+      // then resolve it directly; otherwise resolve as an array.
       else resolve(p.length < 2 ? p[0] : p)
     })
   })
@@ -371,10 +383,10 @@ function p(cb) {
  */
 HyperVault.prototype._archiveOf = function (name, callback) {
   this.indexView((err, tree) => {
-    name = unixify(name)
-    if (name[0] !== '/') name = '/' + name
+    name = path.resolve('/', name)
     let entry = tree[name]
     if (!entry) return callback(new Error('file not found, TODO: create a real ENOENT err'))
+
     const archive = this.multi.feeds().find(arch => arch.key.toString('hex') === entry.source)
     if (!archive) return callback(new Error(`Archive ${entry.source} not available`))
     callback(null, archive)

@@ -6,7 +6,23 @@ const rm = require('rimraf')
 const path = require('path')
 const RAM = require('random-access-memory')
 
-test('folder indexer',function(t) {
+test('Automerge fitness', t => {
+  const am = require('automerge')
+  const v1 = am.init()
+  const v2 = am.change(v1, 'wtf', d => {
+    d['/kek.txt'] = {
+      mtime: new Date(),
+      blockSize: 242,
+      blockId: 55
+    }
+  })
+  const v3 = am.change(v2, d => {
+    delete d['/kek.text']
+  })
+  debugger
+})
+
+test('folder indexer', t => {
   t.plan(3)
   HyperVault._indexFolder('node_modules/', (err, index) => {
     t.error(err)
