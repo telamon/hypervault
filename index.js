@@ -27,7 +27,8 @@ const datstore = require('dat-storage')
 const path = require('path')
 const fs = require('fs')
 const pump = require('pump')
-const Automerge = require('automerge')
+const Hyperphet = require('./lib/hyperphet')
+const am = require('automerge')
 
 // Export class and methods
 module.exports = HyperVault
@@ -65,17 +66,30 @@ function HyperVault(key, repo, secret, opts) {
   }
   // Initialize multifeed + sigrid
   this.sig = sigrid(this.key, storage, this.secret)
-  this.multi = multifeed(hyperdrive, storage, {
-    checkout: {}
-  })
+  this.multi = multifeed(spawnCore, storage)
   this.multi.use(this.sig)
 
   // Initialize automerge
-  this.merge = Automerge.init()
+  this.merge = am.init()
 
   this.ready(() => {
     debug('vault initialized')
   })
+}
+
+// Monkeypatching hyperdrive to redirect all tree-ops to our
+// CRDT core
+function spawnCore (storage, key, opts) {
+  if (typeof key !== 'string' && !Buffer.isBuffer(key)) {
+    opts = key
+    key = null
+  }
+
+  const db = new Hyperphet(storage, key, opts)
+
+  return hyperdrive(storage, key, Object.assign({}, opts, {
+    metadata: db
+  }))
 }
 
 HyperVault.prototype.replicate = function (opts) {
@@ -98,6 +112,13 @@ HyperVault.prototype.ready = function(cb) {
  */
 HyperVault.prototype.indexView = function(done) {
   const feeds = this.multi.feeds()
+  const hypertree = feeds.reduce((a, b) => {
+    if (!a) return b.metadata.doc
+    return am.merge(a, b.metadata.doc)
+  }, null)
+
+  done(null, hypertree)
+  /*
   const tree = {}
 
   // Step 1. Collect all events from all hyperdrive trees into
@@ -139,29 +160,7 @@ HyperVault.prototype.indexView = function(done) {
       if (dummy.length) current[file] = dummy[0]
     })
     done(null, current)
-      /*
-      if (entry.type === 'put') {
-        let stat = {
-          feed: archive.name,
-          mtime: entry.value.mtime,
-          version: entry.version
-        }
-
-        if (!tree[file]) { // tree does not contain file previously
-          tree[file] = stat
-        } else if (tree[file].mtime < stat.mtime){ // Update tree with newer version of file
-          tree[file] = stat
-        }
-      } else (entry.type == 'del') {
-        debugger // TODO: not yet tested.
-        // Delete file from tree if the delete op is considered 'newer'
-        if (tree[file] && tree[file].mtime < stat.mtime) {
-          // TODO: this does not solve deletion when 'reflecting', it might just
-          // cause another import.
-          delete tree[file]
-        }
-      }*/
-  }
+  }*/
 }
 
 HyperVault.prototype.hyperTime = function () {
@@ -387,7 +386,7 @@ HyperVault.prototype._archiveOf = function (name, callback) {
     let entry = tree[name]
     if (!entry) return callback(new Error('file not found, TODO: create a real ENOENT err'))
 
-    const archive = this.multi.feeds().find(arch => arch.key.toString('hex') === entry.source)
+    const archive = this.multi.feeds().find(arch => arch.discoveryKey.toString('hex') === entry.feed)
     if (!archive) return callback(new Error(`Archive ${entry.source} not available`))
     callback(null, archive)
   })

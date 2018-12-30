@@ -40,8 +40,8 @@ test.only('distributed clocks & changes', (t) => {
     t.deepEqual(v2.hyperTime(), v3.hyperTime())
     v2.indexView((err, tree) => {
       // v3's shared.txt was created last, thus v3 should be owner of current shared.txt
-      const sharedOwner = v2.multi.feeds().find(f => f.key.toString('hex') === tree['/shared.txt'].source)
-      t.equal(sharedOwner.key.toString('hex'), v3._local.key.toString('hex'))
+      const sharedOwner = v2.multi.feeds().find(f => f.discoveryKey.toString('hex') === tree['/shared.txt'].feed)
+      t.equal(sharedOwner.discoveryKey.toString('hex'), v3._local.discoveryKey.toString('hex'))
       // v2 creates a new file and replicates with v1
       v2.writeFile(`frog.txt`, Buffer.from('amphibian'), (err, timestamp) => {
         t.error(err)
