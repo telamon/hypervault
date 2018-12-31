@@ -191,14 +191,17 @@ HyperVault.prototype.reflect = function(cb) {
 
         // Decide what to do with it
         let action = 'nop'
-        if (hyperTree[file] && !fsTree[file]) action = 'export'
-        else if (!hyperTree[file] && fsTree[file]) action = 'import'
-        else if (hyperTree[file] && fsTree[file]) {
-          debug('REFLECT: comparing', file, hyperTree[file].mtime, fsTree[file].mtime)
+        const hstat = hyperTree[file]
+        const fstat = fsTree[file]
 
+        if (hstat && hstat.deleted && fstat.mtime < hstat.mtime) action = 'delete-local' // losses offline changes
+        else if (hstat && !fstat) action = 'export'
+        else if (!hstat && fstat) action = 'import'
+        else if (hstat && fstat) {
+          debug('REFLECT: comparing', file, hstat.mtime, fstat.mtime)
           // prototype conflict resolution using mtime (pick newest)
-          if (hyperTree[file].mtime < fsTree[file].mtime) action = 'import'
-          else if (hyperTree[file].mtime > fsTree[file].mtime) action = 'export'
+          if (hstat.mtime < fstat.mtime) action = 'import'
+          else if (hstat.mtime > fstat.mtime) action = 'export'
         }
 
         debug('REFLECT:', action.toUpperCase(), '\t\t', file)
@@ -206,7 +209,7 @@ HyperVault.prototype.reflect = function(cb) {
 
         // Import if needed TODO: stop importing deleted entries.
         if (action === 'import' && this.canWrite) {
-          importFile(this._local, this.repo, file, fsTree[file], err => {
+          importFile(this._local, this.repo, file, fstat, err => {
             if (err) return cb(err)
             else nextEntry(i + 1)
           })
@@ -214,8 +217,8 @@ HyperVault.prototype.reflect = function(cb) {
 
         // Export if needed
         if (action === 'export' && !this.bare) {
-          let srcFeed = this.multi.feeds().find(f => f.discoveryKey.toString('hex'), [hyperTree[file].feed])
-          exportFile(srcFeed, this.repo, file, hyperTree[file], err => {
+          let srcFeed = this.multi.feeds().find(f => f.discoveryKey.toString('hex'), [hstat.feed])
+          exportFile(srcFeed, this.repo, file, hstat, err => {
             if (err) return cb(err)
             else nextEntry(i + 1)
           })
