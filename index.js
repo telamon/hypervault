@@ -64,14 +64,12 @@ function HyperVault(key, repo, secret, opts) {
     else if (!self.opts.storage) return raf(fullPath)
     else throw new Error('Optional storage was passed but only random-access is supported now')
   }
+
   // Initialize multifeed + sigrid
   this.sig = sigrid(this.key, storage, this.secret)
-  this.multi = multifeed(spawnCore, storage)
+  this.multi = multifeed(spawnCore.bind(this), storage)
   this.multi.use(this.sig)
-
-  // Initialize automerge
-  this.merge = am.init()
-
+  this.multi.on('feed', this.appendChangeListenerToFeed.bind(this))
   this.ready(() => {
     debug('vault initialized')
   })
@@ -87,9 +85,43 @@ function spawnCore (storage, key, opts) {
 
   const db = new Hyperphet(storage, key, opts)
 
+  // yikes.
+  db.wormholeGet = (key, opts, callback) => {
+    if ( typeof opts === 'function') {
+      callback = opts
+      opts = {}
+    }
+    callback(null, this._local.metadata.doc[path.resolve('/', key)])
+  }
+
   return hyperdrive(storage, key, Object.assign({}, opts, {
     metadata: db
   }))
+}
+
+HyperVault.prototype.appendChangeListenerToFeed = function(feed) {
+  // We don't want to append change listeners on our own writers.
+  // since their changes get loaded during initialization
+  // and they're really the ones holding the CRDT-documents which are the
+  // final recievers of theese change-events. for this experiment
+  // we're only going to use one single writer implicitly saying only one single
+  // CRDT-document.
+  if (feed.writable) return // It's a writer, don't bother
+  // subscribe to remote download events
+  // and automatically apply them to this._local.metadata.doc
+  feed.metadata.on('download',this.onChangesDownloaded.bind(this))
+}
+
+HyperVault.prototype.onChangesDownloaded = function (seq, data) {
+  if (data.toString('utf8').match(/^\n\nhyperdrive/)) return
+  try {
+    const batch = JSON.parse(data.toString('utf8'))
+    this._local.metadata.doc = am.applyChanges(this._local.metadata.doc, batch)
+  } catch(err) {
+    debug("Failed to deserialize changes", err)
+    //this.emit('error', err)
+    //this.removeAllListeners()
+  }
 }
 
 HyperVault.prototype.replicate = function (opts) {
@@ -111,58 +143,10 @@ HyperVault.prototype.ready = function(cb) {
  * that contains the latest changes from all cores.
  */
 HyperVault.prototype.indexView = function(done) {
-  const feeds = this.multi.feeds()
-  const hypertree = feeds.reduce((a, b) => {
-    if (!a) return b.metadata.doc
-    return am.merge(a, b.metadata.doc)
-  }, null)
-
-  done(null, hypertree)
-  /*
-  const tree = {}
-
-  // Step 1. Collect all events from all hyperdrive trees into
-  // a multiverse of possibilities
-
-  const nextFeed = (i) => { // feed-iterator
-    // Call merge() when all feeds are processed.
-    if (i >= feeds.length) return merge()
-
-    const archive = feeds[i]
-    const feedKey = archive.key.toString('hex')
-    const stream = archive.history()
-
-    const entryHandler = entry => {
-      const file = entry.name
-      if(!tree[file]) tree[file] = []
-
-      tree[file].push(Object.assign({}, entry, {source: feedKey}))
-
-    } // end of entryHandler
-
-    stream.on('data', entryHandler)
-    stream.once('error', err => done(err))
-    stream.once('end', () => {
-      stream.removeAllListeners()
-      nextFeed(i + 1)
-    })
-  }
-  nextFeed(0) // Start the loop
-
-  // Step 2. process eventual consistency
-  const merge = () => {
-    const current = {}
-
-    Object.keys(tree).forEach(file => {
-      const entries = tree[file]
-      // Dummy merge
-      let dummy = entries.filter(e => e.type === 'put').sort((a, b) => b.value.mtime - a.value.mtime)
-      if (dummy.length) current[file] = dummy[0]
-    })
-    done(null, current)
-  }*/
+  done(null, this._local.metadata.doc)
 }
 
+/** not used **/
 HyperVault.prototype.hyperTime = function () {
   const feeds = this.multi.feeds()
   return feeds.map((archive) => {
@@ -187,7 +171,8 @@ HyperVault.prototype.hyperTime = function () {
  */
 HyperVault.prototype.reflect = function(cb) {
   const changeLog = {}
-  this.indexView((err, hyperTree, version) => {
+
+  this.indexView((err, hyperTree) => {
     if (err) return cb(err)
 
     _indexFolder(this.repo, (err, fsTree) => {
@@ -229,7 +214,7 @@ HyperVault.prototype.reflect = function(cb) {
 
         // Export if needed
         if (action === 'export' && !this.bare) {
-          let srcFeed = this.multi._feeds[hyperTree[file].feed]
+          let srcFeed = this.multi.feeds().find(f => f.discoveryKey.toString('hex'), [hyperTree[file].feed])
           exportFile(srcFeed, this.repo, file, hyperTree[file], err => {
             if (err) return cb(err)
             else nextEntry(i + 1)
@@ -308,7 +293,7 @@ function _indexFolder(arch, dir, cb) {
         //debug('INDEX: processing entry:', fpath)
 
         // TODO: better ignore, hardcoding dosen't sit right.
-        if (fpath.match(/^\/.puzzlebox/)) return next(i + 1)
+        if (fpath.match(/^\/.hypervault/)) return next(i + 1)
 
         lstat(fpath, (err, stat) => {
           if (err) return cb(err)

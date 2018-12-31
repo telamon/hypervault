@@ -6,22 +6,6 @@ const rm = require('rimraf')
 const path = require('path')
 const RAM = require('random-access-memory')
 
-test('Automerge fitness', t => {
-  const am = require('automerge')
-  const v1 = am.init()
-  const v2 = am.change(v1, 'wtf', d => {
-    d['/kek.txt'] = {
-      mtime: new Date(),
-      blockSize: 242,
-      blockId: 55
-    }
-  })
-  const v3 = am.change(v2, d => {
-    delete d['/kek.text']
-  })
-  debugger
-})
-
 test('folder indexer', t => {
   t.plan(3)
   HyperVault._indexFolder('node_modules/', (err, index) => {
@@ -32,7 +16,7 @@ test('folder indexer', t => {
   })
 })
 
-test.only('distributed clocks & changes', (t) => {
+test('distributed clocks & changes', (t) => {
   t.plan(40)
 
   setupVaults((vaults) => {
@@ -41,6 +25,7 @@ test.only('distributed clocks & changes', (t) => {
     v2.indexView((err, tree) => {
       // v3's shared.txt was created last, thus v3 should be owner of current shared.txt
       const sharedOwner = v2.multi.feeds().find(f => f.discoveryKey.toString('hex') === tree['/shared.txt'].feed)
+
       t.equal(sharedOwner.discoveryKey.toString('hex'), v3._local.discoveryKey.toString('hex'))
       // v2 creates a new file and replicates with v1
       v2.writeFile(`frog.txt`, Buffer.from('amphibian'), (err, timestamp) => {
@@ -120,8 +105,8 @@ test.only('distributed clocks & changes', (t) => {
   }
 })
 
-test('Reflection', function(t) {
-  t.plan(17)
+test.only('Reflection', function(t) {
+  t.plan(19)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const testDir = '/tmp/reflectionTest'
   const vault = new HyperVault(pair.publicKey, testDir, pair.secretKey)
@@ -170,6 +155,16 @@ test('Reflection', function(t) {
                   t.error(err)
                   let fileStat = fs.lstatSync(path.join(testDir, 'IMPORTME.md'))
                   t.equal(fileStat.mtime.getTime(), hyperStat.mtime.getTime(), 'imported mtime is reflected')
+                  fs.unlink(path.join(testDir, 'package.json'), err => {
+                    vault.reflect((err, changes) => {
+                      t.error(err)
+                      vault.indexView((err, tree) => {
+                        t.error(err)
+                        t.equal(tree['/package.json'].deleted, true)
+                        debugger
+                      })
+                    })
+                  })
                 })
               })
             })
