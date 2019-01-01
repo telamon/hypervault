@@ -24,9 +24,9 @@
     "dat-storage": "^1.1.1",
     "debug": "^4.1.0",
     "hypercore": "^6.22.0",
-    "hyperdrive": "file:../hyperdrive",
-    "multifeed": "file:../multifeed",
-    "multifeed-sigrid": "file:../multifeed-sigrid",
+    "hyperdrive": "telamon/hyperdrive#monkey-tree",
+    "@telamon/multifeed": "^2.0.8",
+    "multifeed-sigrid": "^1.0.0",
     "sodium-universal": "^2.0.0",
     "unixify": "^1.0.0",
     "xtend": "^4.0.1"
