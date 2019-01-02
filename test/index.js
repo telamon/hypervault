@@ -16,16 +16,19 @@ test('folder indexer', t => {
   })
 })
 
-test('distributed clocks & changes', (t) => {
+test.only('distributed clocks & changes', (t) => {
   t.plan(40)
 
   setupVaults((vaults) => {
     const [v1, v2, v3] = vaults
     t.deepEqual(v2.hyperTime(), v3.hyperTime())
     v2.indexView((err, tree) => {
+      t.error(err)
+      t.notDeepEqual(tree, {})
       // v3's shared.txt was created last, thus v3 should be owner of current shared.txt
-      const sharedOwner = v2.multi.feeds().find(f => f.discoveryKey.toString('hex') === tree['/shared.txt'].feed)
-
+      const sharedOwner = v2.multi.feeds().find(f => {
+        return f.key.toString('hex') === tree['/shared.txt'].id.split('@')[0]
+      })
       t.equal(sharedOwner.discoveryKey.toString('hex'), v3._local.discoveryKey.toString('hex'))
       // v2 creates a new file and replicates with v1
       v2.writeFile(`frog.txt`, Buffer.from('amphibian'), (err, timestamp) => {
@@ -91,13 +94,10 @@ test('distributed clocks & changes', (t) => {
       t.error(err)
       const alias = vault._local.discoveryKey.toString('hex').substr(0, 8)
       vault._alias = alias // let's attach a small tag to each vault for easier testing.
-      vault.writeFile(`individual_${alias}.txt`, Buffer.from(alias), (err, timestamp) => {
+      vault.writeFile(`individual_${alias}.txt`, Buffer.from(alias), (err) => {
         t.error(err)
-        t.equal(Array.isArray(timestamp), true)
-        t.equal(timestamp.length, 1)
         vault.writeFile('shared.txt', Buffer.from(alias), (err, timestamp) => {
           t.error(err)
-          t.equal(Array.isArray(timestamp), true)
           done(vault)
         })
       })
@@ -105,7 +105,7 @@ test('distributed clocks & changes', (t) => {
   }
 })
 
-test.only('Reflection', function(t) {
+test('Reflection', function(t) {
   t.plan(19)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const testDir = '/tmp/reflectionTest'

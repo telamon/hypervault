@@ -17,14 +17,16 @@
  */
 
 const debug = require('debug')('hypervault')
-const multifeed = require('multifeed')
+const multifeed = require('../multifeed')
 const sigrid = require('multifeed-sigrid')
 const assert = require('assert')
-const hypercore = require('hypercore')
-const krypto = require('./lib/crypto')
-const raf = require('random-access-file')
 const path = require('path')
-
+const hypercore = require('hypercore')
+const kappa = require('kappa-core')
+const raf = require('random-access-file')
+const krypto = require('./lib/crypto')
+const HyperFS = require('./lib/hyperfs')
+const metadrive = require('./lib/metadrive')
 
 class HyperVault {
 
@@ -48,19 +50,29 @@ class HyperVault {
     const self = this
     const storage = (target) => {
       let fullPath = path.join(self.repo, self.metaDir, target)
+      // don't subpath cores into hidden folder if repo marked as 'bare'
       if (self.bare) fullPath = path.join(self.repo, target)
+      // Proxy to random-access storage from opts if provided
       if (typeof self.opts.storage === 'function') return self.opts.storage(fullPath)
+      // Proxy to random-access-file storing in our repo folder (default)
       else if (!self.opts.storage) return raf(fullPath)
+      // Complain if someone passed a dat-storage type object instead of function
       else throw new Error('Optional storage was passed but only random-access is supported now')
     }
+    this._storage = storage
 
     // Initialize multifeed + sigrid
     this.sig = sigrid(this.key, storage, this.secret)
-    this.multi = multifeed(hypercore, storage)
+    this.multi = multifeed(metadrive, storage)
+    // this.multi.use(new OtherDrive.binfeedAnnouncer())
     this.multi.use(this.sig)
     this.ready(() => {
       debug('vault initialized')
     })
+    this.db = kappa(storage, {
+      multifeed: this.multi
+    })
+    this.tree = new HyperFS(this.db)
   }
 
   replicate (opts) {
@@ -82,7 +94,7 @@ class HyperVault {
    * that contains the latest changes from all cores.
    */
   indexView (done) {
-    //TODO
+    this.tree.toHash(done)
   }
 
   /** not used **/
@@ -104,39 +116,63 @@ class HyperVault {
    * todo: accept opts with timestamp to read tree at different versions.
    */
   _archiveOf (name, callback) {
-    this.indexView((err, tree) => {
-      name = path.resolve('/', name)
-      let entry = tree[name]
-      if (!entry) return callback(new Error('file not found, TODO: create a real ENOENT err'))
-
-      const archive = this.multi.feeds().find(arch => arch.discoveryKey.toString('hex') === entry.feed)
-      if (!archive) return callback(new Error(`Archive ${entry.source} not available`))
-      callback(null, archive)
-    })
+    this.tree.feedOf(name, callback)
   }
 
-  writeFile (name, data, callback) {
-    this._local.writeFile(name, data, err => {
-      if (err) callback(err)
-      else callback(null, this.hyperTime())
+  writeFile (name, data, opts, callback) {
+    if(typeof opts === 'function') { callback = opts; opts = {} }
+    const stream = this.createWriteStream(name, opts, (err, stream) => {
+      stream.end(Buffer.from(data), callback)
     })
   }
 
   unlink (name, callback) {
-    this._local.unlink(name, callback)
+    this.tree.bury(name, callback)
   }
 
   readFile (name, callback) {
-    this._archiveOf(name, (err, archive) => {
-      if (err) callback(err)
-      else archive.readFile(name, callback)
+    this.createReadStream(name, (err, stream) => {
+      if (err) return callback(err)
+      let buffer = null
+
+      stream.on('data', chunk => {
+        if (!buffer) buffer = chunk
+        else buffer = Buffer.concat([buffer,chunk], 2)
+      })
+
+      stream.on('end', () => {
+        callback(null, buffer)
+      })
     })
   }
 
   createReadStream (name, callback) {
     this._archiveOf(name, (err, archive) => {
-      if (err) callback(err)
-      else archive.createReadStream(name, callback)
+      if (err) return callback(err)
+      debugger
+    })
+  }
+
+  createWriteStream (name, opts, callback) {
+    debug('writeStream created', name, opts)
+    if(typeof opts === 'function') { callback = opts; opts = {} }
+
+    const stream = hypercore(this._storage).createWriteStream(opts)
+    stream.on('finish', () => {
+      debug('WriteSteam finished')
+    })
+
+    const entry = {
+      stat: {
+        mtime: new Date().getTime()
+      },
+      blockId: 2,
+      size: 500230
+    }
+
+    this.tree.set(name, entry, (err) => {
+      if (err) { throw err }
+      callback(null, stream)
     })
   }
 }
@@ -172,5 +208,3 @@ function p(cb) {
     })
   })
 }
-
-
