@@ -63,31 +63,32 @@ class HyperVault {
 
     // Initialize multifeed + sigrid
     this.sig = sigrid(this.key, storage, this.secret)
-    this.multi = multifeed(metadrive, storage)
+    this.multi = multifeed(metadrive, storage, {hyperfs: this.tree}) // TODO: refleak, no way to GC feeds
     // this.multi.use(new OtherDrive.binfeedAnnouncer())
     this.multi.use(this.sig)
-    this.ready(() => {
-      debug('vault initialized')
-    })
     this.db = kappa(storage, {
       multifeed: this.multi
     })
     this.tree = new HyperFS(this.db)
+    this.ready(() => {
+      debug('vault initialized')
+    })
   }
 
   replicate (opts) {
     return this.multi.replicate(opts)
   }
 
-  ready (cb) {
-    this.multi.ready(() => {
-      if (this.canWrite) this.multi.writer('local', (err, writer) => {
-        if (err) return cb(err)
+  ready (callback) {
+    this.db.ready(() => {
+      if (this.canWrite) this.db._logs.writer(HyperFS.DEFAULT_FEED, (err, writer) => {
+        if (err) return callback(err)
         this._local = writer
-        cb(null)
+        this._local.ready(callback)
       })
-      else cb()
+      else callback()
     })
+
   }
 
   /** combines all hyperdrives into a virtual tree
@@ -120,6 +121,7 @@ class HyperVault {
   }
 
   writeFile (name, data, opts, callback) {
+    return this._local.drive.writeFile(name, data, opts, callback)
     if(typeof opts === 'function') { callback = opts; opts = {} }
     const stream = this.createWriteStream(name, opts, (err, stream) => {
       stream.end(Buffer.from(data), callback)
@@ -156,6 +158,8 @@ class HyperVault {
   createWriteStream (name, opts, callback) {
     debug('writeStream created', name, opts)
     if(typeof opts === 'function') { callback = opts; opts = {} }
+
+    return callback(null, this._local.drive.createWriteStream(name, opts))
 
     const stream = hypercore(this._storage).createWriteStream(opts)
     stream.on('finish', () => {
