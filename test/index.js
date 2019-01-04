@@ -21,10 +21,10 @@ test.only('distributed clocks & changes', (t) => {
 
   setupVaults((vaults) => {
     const [v1, v2, v3] = vaults
-    t.deepEqual(v2.hyperTime(), v3.hyperTime())
+    t.deepEqual(v2.hyperTime(), v3.hyperTime(), 'compare hypertime')
     v2.indexView((err, tree) => {
       t.error(err)
-      t.notDeepEqual(tree, {})
+      t.notDeepEqual(tree, {}, 'Tree not empty')
       // v3's shared.txt was created last, thus v3 should be owner of current shared.txt
       const sharedOwner = v2.multi.feeds().find(f => {
         return f.key.toString('hex') === tree['/shared.txt'].id.split('@')[0]
@@ -96,7 +96,7 @@ test.only('distributed clocks & changes', (t) => {
       vault._alias = alias // let's attach a small tag to each vault for easier testing.
       vault.writeFile(`individual_${alias}.txt`, Buffer.from(alias), (err) => {
         t.error(err)
-        vault.writeFile('shared.txt', Buffer.from(alias), (err, timestamp) => {
+        vault.writeFile('shared.txt', Buffer.from(alias), (err) => {
           t.error(err)
           done(vault)
         })

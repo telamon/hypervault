@@ -46,7 +46,6 @@ class HyperVault {
     this.repo = repo || '.'
     this.bare = !!this.opts.bare
     this.metaDir = '.hypervault'
-
     const self = this
     const storage = (target) => {
       let fullPath = path.join(self.repo, self.metaDir, target)
@@ -63,7 +62,7 @@ class HyperVault {
 
     // Initialize multifeed + sigrid
     this.sig = sigrid(this.key, storage, this.secret)
-    this.multi = multifeed(metadrive, storage, {hyperfs: this.tree}) // TODO: refleak, no way to GC feeds
+    this.multi = multifeed(metadrive, storage)
     // this.multi.use(new OtherDrive.binfeedAnnouncer())
     this.multi.use(this.sig)
     this.db = kappa(storage, {
@@ -121,10 +120,14 @@ class HyperVault {
   }
 
   writeFile (name, data, opts, callback) {
-    return this._local.drive.writeFile(name, data, opts, callback)
+    return this._local.writeFile(name, data, opts, (err) => {
+      debugger
+    })
     if(typeof opts === 'function') { callback = opts; opts = {} }
     const stream = this.createWriteStream(name, opts, (err, stream) => {
-      stream.end(Buffer.from(data), callback)
+      stream.end(Buffer.from(data), (err) => {
+        callback(err)
+      })
     })
   }
 
@@ -193,22 +196,3 @@ HyperVault.prototype.reflect = require('./lib/reflect')
 
 module.exports._indexFolder = require('./lib/reflect')._indexFolder
 
-// A quick'n'dirty way to wrap es5 callback style methods
-// inside a promise without having to 'promisify' every function individually
-// usage:
-// p(done => {
-//  doSomething(err => {
-//    if (err) return done(err)
-//    doSomethingElse(done)
-//  })
-// })
-function p(cb) {
-  return new Promise(function(resolve, reject) {
-    cb(function (err, ...p) {
-      if (err) reject(err)
-      // If our cb was called with a single parameter
-      // then resolve it directly; otherwise resolve as an array.
-      else resolve(p.length < 2 ? p[0] : p)
-    })
-  })
-}
