@@ -124,17 +124,7 @@ class HyperVault {
   }
 
   writeFile (name, data, opts, callback) {
-    // WOOT
-    return this._local.writeFile(name, data, opts, (err) => {
-      debugger
-    })
-    // prev
-    if(typeof opts === 'function') { callback = opts; opts = {} }
-    const stream = this.createWriteStream(name, opts, (err, stream) => {
-      stream.end(Buffer.from(data), (err) => {
-        callback(err)
-      })
-    })
+    this.fs.writeFile(name, data, opts, callback)
   }
 
   unlink (name, callback) {
@@ -158,35 +148,16 @@ class HyperVault {
   }
 
   createReadStream (name, callback) {
+    this.fs.createReadStream(name, callback)
+    /*
     this._archiveOf(name, (err, archive) => {
       if (err) return callback(err)
       debugger
-    })
+    })*/
   }
 
   createWriteStream (name, opts, callback) {
-    debug('writeStream created', name, opts)
-    if(typeof opts === 'function') { callback = opts; opts = {} }
-
-    return callback(null, this._local.drive.createWriteStream(name, opts))
-
-    const stream = hypercore(this._storage).createWriteStream(opts)
-    stream.on('finish', () => {
-      debug('WriteSteam finished')
-    })
-
-    const entry = {
-      stat: {
-        mtime: new Date().getTime()
-      },
-      blockId: 2,
-      size: 500230
-    }
-
-    this.fs.set(name, entry, (err) => {
-      if (err) { throw err }
-      callback(null, stream)
-    })
+    this.fs.createWriteStream(name, opts, callback)
   }
 }
 
