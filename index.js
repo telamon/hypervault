@@ -25,7 +25,7 @@ const hypercore = require('hypercore')
 const kappa = require('kappa-core')
 const raf = require('random-access-file')
 const krypto = require('./lib/crypto')
-const HyperFS = require('./lib/hyperfs')
+const KappaFS = require('./lib/kappafs')
 const metadrive = require('./lib/metadrive')
 
 class HyperVault {
@@ -63,12 +63,16 @@ class HyperVault {
     // Initialize multifeed + sigrid
     this.sig = sigrid(this.key, storage, this.secret)
     this.multi = multifeed(metadrive, storage)
-    // this.multi.use(new OtherDrive.binfeedAnnouncer())
     this.multi.use(this.sig)
+
+    // Initialize kappa core with our custom multifeed
     this.db = kappa(storage, {
       multifeed: this.multi
     })
-    this.tree = new HyperFS(this.db)
+
+    // Initialize the virtual-fs-tree
+    this.fs = new KappaFS(this.db)
+
     this.ready(() => {
       debug('vault initialized')
     })
@@ -80,7 +84,7 @@ class HyperVault {
 
   ready (callback) {
     this.db.ready(() => {
-      if (this.canWrite) this.db._logs.writer(HyperFS.DEFAULT_FEED, (err, writer) => {
+      if (this.canWrite) this.db._logs.writer(KappaFS.DEFAULT_FEED, (err, writer) => {
         if (err) return callback(err)
         this._local = writer
         this._local.ready(callback)
@@ -94,7 +98,7 @@ class HyperVault {
    * that contains the latest changes from all cores.
    */
   indexView (done) {
-    this.tree.toHash(done)
+    this.fs.toHash(done)
   }
 
   /** not used **/
@@ -116,13 +120,15 @@ class HyperVault {
    * todo: accept opts with timestamp to read tree at different versions.
    */
   _archiveOf (name, callback) {
-    this.tree.feedOf(name, callback)
+    this.fs.feedOf(name, callback)
   }
 
   writeFile (name, data, opts, callback) {
+    // WOOT
     return this._local.writeFile(name, data, opts, (err) => {
       debugger
     })
+    // prev
     if(typeof opts === 'function') { callback = opts; opts = {} }
     const stream = this.createWriteStream(name, opts, (err, stream) => {
       stream.end(Buffer.from(data), (err) => {
@@ -132,7 +138,7 @@ class HyperVault {
   }
 
   unlink (name, callback) {
-    this.tree.bury(name, callback)
+    this.fs.bury(name, callback)
   }
 
   readFile (name, callback) {
@@ -177,7 +183,7 @@ class HyperVault {
       size: 500230
     }
 
-    this.tree.set(name, entry, (err) => {
+    this.fs.set(name, entry, (err) => {
       if (err) { throw err }
       callback(null, stream)
     })
