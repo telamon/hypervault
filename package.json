@@ -22,6 +22,7 @@
     "collect-stream": "^1.2.1",
     "debug": "^4.1.0",
     "duplexify": "^3.6.1",
+    "from2": "^2.3.0",
     "hypercore": "^6.22.0",
     "hyperdrive": "^9.14.0",
     "kappa-core": "file:../kappa-core",

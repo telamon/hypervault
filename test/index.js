@@ -5,7 +5,7 @@ const fs = require('fs')
 const rm = require('rimraf')
 const path = require('path')
 const RAM = require('random-access-memory')
-
+const debug = require('debug')('hypervault-test')
 test('folder indexer', t => {
   t.plan(3)
   HyperVault._indexFolder('node_modules/', (err, index) => {
@@ -33,19 +33,29 @@ test.only('distributed clocks & changes', (t) => {
       // v2 creates a new file and replicates with v1
       v2.writeFile(`frog.txt`, Buffer.from('amphibian'), (err, timestamp) => {
         t.error(err)
+        debug('First repl START')
         replicate(v1, v2, err => {
           t.error(err)
+          debug('First repl DONE')
           // v2 updates the file
           v2.writeFile('frog.txt', Buffer.from('amphibians have mucus glands'), (err) => {
             // v2 also deletes something cause I want see what delete looks like.
             v2.unlink('shared.txt', err => {
               t.error(err)
+              let v1EventsCount = v1._local._bin.length
               // v1 updates the file.
               v1.writeFile('frog.txt', Buffer.from('toads'), (err) => {
                 t.error(err)
+                t.equal(v1._local._bin.length, v1EventsCount + 1, 'Change should have created new block')
+                const shit = v2.multi.feeds().find(f => f.key.toString('hex') === v1._local.key.toString('hex'))
+                t.equal(shit._bin.length, v1EventsCount, 'V2 should not yet be aware of the new change')
                 // v1 and v2 replicate
+                debug('Second repl START')
                 replicate(v1, v2, err => {
+                  debug('Second repl DONE')
                   t.error(err)
+                  t.equal(shit._bin.length, v1._local._bin.length, 'Changes should have been replicated')
+
                   v1.indexView((err, tree) => {
                     t.error(err)
                     v2.readFile('frog.txt', (err, chunk) => {

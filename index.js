@@ -119,7 +119,7 @@ class HyperVault {
   /** uses indexView + entry.source to locate the archive mentioned by the tree.
    * todo: accept opts with timestamp to read tree at different versions.
    */
-  _archiveOf (name, callback) {
+  feedOf (name, callback) {
     this.fs.feedOf(name, callback)
   }
 
@@ -132,28 +132,11 @@ class HyperVault {
   }
 
   readFile (name, callback) {
-    this.createReadStream(name, (err, stream) => {
-      if (err) return callback(err)
-      let buffer = null
-
-      stream.on('data', chunk => {
-        if (!buffer) buffer = chunk
-        else buffer = Buffer.concat([buffer,chunk], 2)
-      })
-
-      stream.on('end', () => {
-        callback(null, buffer)
-      })
-    })
+    this.fs.readFile(name, callback)
   }
 
   createReadStream (name, callback) {
     this.fs.createReadStream(name, callback)
-    /*
-    this._archiveOf(name, (err, archive) => {
-      if (err) return callback(err)
-      debugger
-    })*/
   }
 
   createWriteStream (name, opts, callback) {
