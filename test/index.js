@@ -143,9 +143,9 @@ test.only('Reflection', function(t) {
             t.equal(Object.keys(changes).length, 2, 'Two file entries')
             t.equal(changes['/package.json'], 'export')
             t.equal(changes['/pictures/cat.png'], 'export')
-
+            debugger
             // Check the mod times
-            vault._local.lstat('package.json', (err, hyperStat) => {
+            vault.lstat('package.json', (err, hyperStat) => {
               let fileStat = fs.lstatSync(path.join(testDir, 'package.json'))
               t.equal(fileStat.mtime.getTime(), hyperStat.mtime.getTime(), 'exported mtime is reflected')
             })

@@ -142,6 +142,14 @@ class HyperVault {
   createWriteStream (name, opts, callback) {
     this.fs.createWriteStream(name, opts, callback)
   }
+
+  exportFile (name, destination, opts, callback){
+    this.fs.exportFile(name, destination, opts, callback)
+  }
+
+  importFile (name, source, callback) {
+    this.fs.importFile (name, source, callback)
+  }
 }
 
 // Export class and methods
