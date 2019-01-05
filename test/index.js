@@ -115,8 +115,8 @@ test('distributed clocks & changes', (t) => {
   }
 })
 
-test.only('Reflection', function(t) {
-  t.plan(19)
+test('Reflection', function(t) {
+  t.plan(20)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const testDir = '/tmp/reflectionTest'
   const vault = new HyperVault(pair.publicKey, testDir, pair.secretKey)
@@ -140,10 +140,11 @@ test.only('Reflection', function(t) {
           vault.reflect((err, changes, timestamp) => {
             t.error(err)
             // check changelog integrity
+
             t.equal(Object.keys(changes).length, 2, 'Two file entries')
-            t.equal(changes['/package.json'], 'export')
-            t.equal(changes['/pictures/cat.png'], 'export')
-            debugger
+            t.equal(changes['/package.json'].action, 'export')
+            t.equal(changes['/pictures/cat.png'].action, 'export')
+
             // Check the mod times
             vault.lstat('package.json', (err, hyperStat) => {
               let fileStat = fs.lstatSync(path.join(testDir, 'package.json'))
@@ -156,12 +157,12 @@ test.only('Reflection', function(t) {
               vault.reflect((err, changes) => {
                 t.error(err)
                 t.equal(Object.keys(changes).length, 3, 'Three file entries')
-                t.equal(changes['/IMPORTME.md'], 'import')
-                t.equal(changes['/package.json'], 'nop')
-                t.equal(changes['/pictures/cat.png'], 'nop')
+                t.equal(changes['/IMPORTME.md'].action, 'import')
+                t.equal(changes['/package.json'].action, 'nop')
+                t.equal(changes['/pictures/cat.png'].action, 'nop')
 
                 // check imported mtime
-                vault._local.lstat('IMPORTME.md', (err, hyperStat) => {
+                vault.lstat('IMPORTME.md', (err, hyperStat) => {
                   t.error(err)
                   let fileStat = fs.lstatSync(path.join(testDir, 'IMPORTME.md'))
                   t.equal(fileStat.mtime.getTime(), hyperStat.mtime.getTime(), 'imported mtime is reflected')
@@ -171,7 +172,7 @@ test.only('Reflection', function(t) {
                       vault.indexView((err, tree) => {
                         t.error(err)
                         t.equal(tree['/package.json'].deleted, true)
-                        debugger
+                        t.end()
                       })
                     })
                   })

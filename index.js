@@ -150,6 +150,10 @@ class HyperVault {
   importFile (name, source, callback) {
     this.fs.importFile (name, source, callback)
   }
+
+  lstat(name, callback) {
+    this.fs.get(name, callback)
+  }
 }
 
 // Export class and methods
