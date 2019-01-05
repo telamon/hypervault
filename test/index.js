@@ -16,7 +16,7 @@ test('folder indexer', t => {
   })
 })
 
-test.only('distributed clocks & changes', (t) => {
+test('distributed clocks & changes', (t) => {
   t.plan(26)
 
   setupVaults((vaults) => {
@@ -115,15 +115,15 @@ test.only('distributed clocks & changes', (t) => {
   }
 })
 
-test('Reflection', function(t) {
+test.only('Reflection', function(t) {
   t.plan(19)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const testDir = '/tmp/reflectionTest'
   const vault = new HyperVault(pair.publicKey, testDir, pair.secretKey)
 
   // cleanup testdir leftovers from previous run.
-  if (fs.existsSync(testDir)) rm(testDir, setup)
-  else setup()
+  if (!fs.existsSync(testDir)) setup()
+  else rm(testDir, {}, setup)
 
   function setup(err) {
     t.error(err)
