@@ -17,7 +17,7 @@ test('folder indexer', t => {
 })
 
 test.only('distributed clocks & changes', (t) => {
-  t.plan(40)
+  t.plan(26)
 
   setupVaults((vaults) => {
     const [v1, v2, v3] = vaults
@@ -60,7 +60,7 @@ test.only('distributed clocks & changes', (t) => {
                     t.error(err)
                     v2.readFile('frog.txt', (err, chunk) => {
                       t.error(err)
-                      t.equal(chunk.toString('utf8'), 'toads') // Last write rule wins
+                      t.equal(chunk.toString('utf8'), 'toads', 'Last write wins')
                     })
                   })
                 })
