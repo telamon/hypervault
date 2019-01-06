@@ -27,7 +27,6 @@ const raf = require('random-access-file')
 const krypto = require('./lib/crypto')
 const KappaFS = require('./lib/kappafs')
 const metadrive = require('./lib/metadrive')
-
 class HyperVault {
 
   constructor (key, repo, secret, opts) {
@@ -39,6 +38,7 @@ class HyperVault {
     // Assign secrets; TODO: would like to garbage collect them asap.
     this.key = key
     this.canWrite = !!secret
+    this.writable = !!secret // hyperdrive compat
     this.secret = secret
     //this.deviceId = this.opts.deviceId || crypto.randomBytes(4).readUInt32BE()
 
@@ -60,22 +60,34 @@ class HyperVault {
     }
     this._storage = storage
 
-    // Initialize multifeed + sigrid
-    this.sig = sigrid(this.key, storage, this.secret)
+    // Initialize multifeed
     this.multi = multifeed(metadrive, storage)
-    this.multi.use(this.sig)
 
-    // Initialize kappa core with our custom multifeed
-    this.db = kappa(storage, {
-      multifeed: this.multi
+    this._readyPromise = p(callback => {
+      this.multi.ready(() => {
+        this.sig = sigrid(this.key, storage, this.secret) // TODO: add pubkey[s] peristance to siggrid
+        this.multi.use(this.sig)
+
+        // Initialize kappa core with our custom multifeed
+        this.db = kappa(storage, {
+          multifeed: this.multi
+        })
+
+        // Initialize the virtual-fs-tree
+        this.fs = new KappaFS(this.db)
+
+        this.db.ready(() => {
+          if (this.canWrite) this.db._logs.writer(KappaFS.DEFAULT_FEED, (err, writer) => {
+            if (err) return callback(err)
+            this._local = writer
+            this._local.ready(callback)
+          })
+          else callback()
+        })
+      })
     })
-
-    // Initialize the virtual-fs-tree
-    this.fs = new KappaFS(this.db)
-
-    this.ready(() => {
-      debug('vault initialized')
-    })
+    // this._readyPromise.catch((err) => process.nextTick(() => { throw err }) )
+    this._readyPromise.then(() => { debug('vault initialized') })
   }
 
   replicate (opts) {
@@ -83,15 +95,8 @@ class HyperVault {
   }
 
   ready (callback) {
-    this.db.ready(() => {
-      if (this.canWrite) this.db._logs.writer(KappaFS.DEFAULT_FEED, (err, writer) => {
-        if (err) return callback(err)
-        this._local = writer
-        this._local.ready(callback)
-      })
-      else callback()
-    })
-
+    this._readyPromise.then(() => process.nextTick(callback))
+    this._readyPromise.catch( (err) => process.nextTick(() => callback(err)) )
   }
 
   /** combines all hyperdrives into a virtual tree
@@ -167,4 +172,24 @@ module.exports.passwdPair = function(ident, secret) {
 HyperVault.prototype.reflect = require('./lib/reflect')
 
 module.exports._indexFolder = require('./lib/reflect')._indexFolder
+HyperVault.utils = require('./lib/utils') // general hypervault utilities
 
+// A quick'n'dirty way to wrap es5 callback style methods
+// inside a promise without having to 'promisify' every function individually
+// usage:
+// p(done => {
+//  doSomething(err => {
+//    if (err) return done(err)
+//    doSomethingElse(done)
+//  })
+// })
+function p(cb) {
+  return new Promise(function(resolve, reject) {
+    cb(function (err, ...p) {
+      if (err) reject(err)
+      // If our cb was called with a single parameter
+      // then resolve it directly; otherwise resolve as an array.
+      else resolve(p.length < 2 ? p[0] : p)
+    })
+  })
+}

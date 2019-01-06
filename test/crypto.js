@@ -11,7 +11,7 @@ test ('Derive key with arbitrary length from credentials', function (t){
   t.plan(2)
   var buf = kirinCrypto.hashSecret('telamohn@pm.me', 'supersecret', 16)
   debug('_hashSecret',  buf.toString('hex'))
-  t.equal(buf.toString('hex'), 'cffeb02197b731d9fbab0a106b31f809')
+  t.equal(buf.toString('hex'), '84b0cbb619117729ce06487c47d1ddb1')
   var buf2 = kirinCrypto.hashSecret('telamohn@pm.me', 'supersecret2', 16)
   t.notEqual(buf.toString('hex'), buf2.toString('hex'))
   t.end()
@@ -21,7 +21,7 @@ test ('Derive subkey from credentials', function(t) {
   t.plan(1)
   var sub = kirinCrypto.subKey('telamohn@pm.me', 'supersecret', 16, '__auth__', 1)
   debug('_subKey: ',  sub.toString('hex'))
-  t.equal(sub.toString('hex'), 'a749e4c079b733ab6f46239d51c9274d')
+  t.equal(sub.toString('hex'), '3a9c6c5d8efdf7617f682ad98a442948')
   t.end()
 })
 

@@ -122,7 +122,7 @@ test('Reflection', function(t) {
   const vault = new HyperVault(pair.publicKey, testDir, pair.secretKey)
 
   // cleanup testdir leftovers from previous run.
-  if (!fs.existsSync(testDir)) setup()
+  if (false && !fs.existsSync(testDir)) setup()
   else rm(testDir, {}, setup)
 
   function setup(err) {
@@ -186,18 +186,3 @@ test('Reflection', function(t) {
   }
 })
 
-test.skip('dat-storage experiment',(t) => {
-  let storage = require('dat-storage')
-  let hyperdrive = require('hyperdrive')
-  let p = storage('_what/')
-  let drive = hyperdrive(p, {latest: true})
-  debugger
-  drive.ready((err) => {
-    t.error(err)
-    let bin = fs.readFileSync('../cat.png')
-    drive.writeFile('cat.png', bin, (err) => {
-      t.error(err)
-      debugger
-    })
-  })
-})
