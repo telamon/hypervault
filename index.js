@@ -17,7 +17,7 @@
  */
 
 const debug = require('debug')('hypervault')
-const multifeed = require('../multifeed')
+const multifeed = require('multifeed')
 const sigrid = require('multifeed-sigrid')
 const assert = require('assert')
 const path = require('path')
