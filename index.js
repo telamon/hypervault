@@ -43,7 +43,7 @@ class HyperVault {
     //this.deviceId = this.opts.deviceId || crypto.randomBytes(4).readUInt32BE()
 
     // Figure out what kind of repository we're dealing with.
-    this.repo = repo || '.'
+    this.repo = path.resolve(process.cwd(), repo || '.')
     this.bare = !!this.opts.bare
     this.metaDir = '.hypervault'
     const self = this

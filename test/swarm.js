@@ -5,11 +5,14 @@ const RAM = require('random-access-memory')
 const debug = require('debug')('hypervault-test')
 
 test.only ('Initializing a swarm', (t) => {
-  t.plan(400)
+  t.plan(3)
 
   spawnVault(vault => {
     const swarm = new HypervaultSwarm(vault)
-    swarm.join()
+    swarm.join() // this test doesn't really test anything yet.
+    vault.importFile('test.json', 'package.json', (err) => {
+      t.error(err)
+    })
   })
 
   function spawnVault(done) {
