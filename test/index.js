@@ -115,8 +115,8 @@ test('distributed clocks & changes', (t) => {
   }
 })
 
-test('Reflection', function(t) {
-  t.plan(21)
+test.only('Reflection', function(t) {
+  t.plan(24)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const testDir = '/tmp/reflectionTest'
   const vault = new HyperVault(pair.publicKey, testDir, pair.secretKey)
@@ -133,8 +133,8 @@ test('Reflection', function(t) {
       let file = fs.readFileSync('package.json')
       vault.writeFile('package.json', file, function(err){
         t.error(err)
-        file = fs.readFileSync('../cat.png')
-        vault.writeFile('pictures/cat.png', file, function(err){
+
+        vault.writeFile('pictures/cat.png', Buffer.from('this is not a cat'), function(err){
           t.error(err)
           // First reflection, exports our files.
           vault.reflect((err, changes, timestamp) => {
@@ -144,7 +144,8 @@ test('Reflection', function(t) {
             t.equal(Object.keys(changes).length, 2, 'Two file entries')
             t.equal(changes['/package.json'].action, 'export')
             t.equal(changes['/pictures/cat.png'].action, 'export')
-
+            let picContents = fs.readFileSync(path.join(testDir,'/pictures/cat.png'))
+            t.equal(picContents.toString('utf8'), 'this is not a cat', 'Exported content correct')
             // Check the mod times
             vault.lstat('package.json', (err, hyperStat) => {
               let fileStat = fs.lstatSync(path.join(testDir, 'package.json'))
@@ -152,7 +153,7 @@ test('Reflection', function(t) {
             })
 
             // attempt adding file through reflection.
-            pump(fs.createReadStream('README.md'), fs.createWriteStream(path.join(testDir, 'IMPORTME.md')), (err) => {
+            fs.writeFile(path.join(testDir, 'IMPORTME.md'), 'imported', (err) => {
               t.error(err)
               vault.reflect((err, changes) => {
                 t.error(err)
@@ -160,19 +161,23 @@ test('Reflection', function(t) {
                 t.equal(changes['/IMPORTME.md'].action, 'import')
                 t.equal(changes['/package.json'].action, 'nop')
                 t.equal(changes['/pictures/cat.png'].action, 'nop')
-
-                // check imported mtime
-                vault.lstat('IMPORTME.md', (err, hyperStat) => {
+                // check imported content
+                vault.readFile('/IMPORTME.md', (err, chunk) => {
                   t.error(err)
-                  let fileStat = fs.lstatSync(path.join(testDir, 'IMPORTME.md'))
-                  t.equal(fileStat.mtime.getTime(), hyperStat.mtime.getTime(), 'imported mtime is reflected')
-                  fs.unlink(path.join(testDir, 'package.json'), err => {
-                    vault.reflect((err, changes) => {
-                      t.error(err)
-                      vault.indexView((err, tree) => {
+                  t.equal(chunk.toString('utf8'), 'imported', 'Imported content correct')
+                  // check imported mtime
+                  vault.lstat('IMPORTME.md', (err, hyperStat) => {
+                    t.error(err)
+                    let fileStat = fs.lstatSync(path.join(testDir, 'IMPORTME.md'))
+                    t.equal(fileStat.mtime.getTime(), hyperStat.mtime.getTime(), 'imported mtime is reflected')
+                    fs.unlink(path.join(testDir, 'package.json'), err => {
+                      vault.reflect((err, changes) => {
                         t.error(err)
-                        t.equal(tree['/package.json'].deleted, true)
-                        t.end()
+                        vault.indexView((err, tree) => {
+                          t.error(err)
+                          t.equal(tree['/package.json'].deleted, true)
+                          t.end()
+                        })
                       })
                     })
                   })
