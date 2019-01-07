@@ -4,7 +4,7 @@ const test = require('tape')
 const RAM = require('random-access-memory')
 const debug = require('debug')('hypervault-test')
 
-test.only ('Initializing a swarm', (t) => {
+test.skip ('Initializing a swarm', (t) => {
   t.plan(3)
 
   spawnVault(vault => {
@@ -12,6 +12,7 @@ test.only ('Initializing a swarm', (t) => {
     swarm.join() // this test doesn't really test anything yet.
     vault.importFile('test.json', 'package.json', (err) => {
       t.error(err)
+      swarm.destroy(t.end)
     })
   })
 

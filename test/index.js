@@ -116,18 +116,18 @@ test('distributed clocks & changes', (t) => {
 })
 
 test('Reflection', function(t) {
-  t.plan(20)
+  t.plan(21)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const testDir = '/tmp/reflectionTest'
   const vault = new HyperVault(pair.publicKey, testDir, pair.secretKey)
 
   // cleanup testdir leftovers from previous run.
-  if (false && !fs.existsSync(testDir)) setup()
+  if (!fs.existsSync(testDir)) setup()
   else rm(testDir, {}, setup)
 
   function setup(err) {
     t.error(err)
-
+    t.equal(fs.existsSync(testDir), false, 'testfolder should not exist')
     vault.ready(function(err){
       t.error(err)
       let file = fs.readFileSync('package.json')
