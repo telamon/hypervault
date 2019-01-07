@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "decentralized least-authority personal storage",
   "main": "index.js",
+  "bin": {
+    "hypervault": "cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/telamon/hypervault.git"
+  },
   "scripts": {
     "test": "tape test/*",
     "debug": "node inspect $(npm bin)/tape test/*"
