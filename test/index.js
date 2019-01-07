@@ -123,7 +123,7 @@ test('Reflection', function(t) {
 
   // cleanup testdir leftovers from previous run.
   if (!fs.existsSync(testDir)) setup()
-  else rm(testDir, {}, setup)
+  else rm(testDir, {}, (err) => process.nextTick(setup, err))
 
   function setup(err) {
     t.error(err)
