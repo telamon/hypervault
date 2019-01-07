@@ -10,12 +10,18 @@ Oh, and we also support multiple writers! :>
 
 ```bash
 # Initialize a new vault-folder called `myvault`
-npx hypervault init myvault
-<provide a secret passphrase and press enter>
 
-# Start synchronization
+npx hypervault init myvault --repl
+
+#<provide a secret passphrase and press enter>
+
+
+
+# Resume a previously initialized vault
+
 npx hypervault repl myvault
-<provide same passphrase as during init>
+
+#<provide same passphrase as during init>
 
 ```
 
