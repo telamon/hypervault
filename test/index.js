@@ -116,7 +116,7 @@ test('distributed clocks & changes', (t) => {
 })
 
 test.only('Reflection', function(t) {
-  t.plan(24)
+  t.plan(27)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const testDir = '/tmp/reflectionTest'
   const vault = new HyperVault(pair.publicKey, testDir, pair.secretKey)
@@ -170,13 +170,23 @@ test.only('Reflection', function(t) {
                     t.error(err)
                     let fileStat = fs.lstatSync(path.join(testDir, 'IMPORTME.md'))
                     t.equal(fileStat.mtime.getTime(), hyperStat.mtime.getTime(), 'imported mtime is reflected')
+                    // Local delete generates a delete event.
                     fs.unlink(path.join(testDir, 'package.json'), err => {
                       vault.reflect((err, changes) => {
                         t.error(err)
                         vault.indexView((err, tree) => {
                           t.error(err)
-                          t.equal(tree['/package.json'].deleted, true)
-                          t.end()
+                          t.equal(tree['/package.json'].deleted, true, 'local delete is registered')
+                          // Remote delete (or rename) causes the file to
+                          // dissapear
+                          vault.unlink('IMPORTME.md', (err) => {
+                            t.error(err)
+                            vault.reflect((err, changes) => {
+                              t.equal(changes['/IMPORTME.md'].action, 'delete', 'Reflect action = delete')
+                              t.equal(fs.existsSync(path.join(testDir, 'IMPORTME.md')), false, 'File was removed from folder')
+                              t.end()
+                            })
+                          })
                         })
                       })
                     })
