@@ -115,8 +115,8 @@ test('distributed clocks & changes', (t) => {
   }
 })
 
-test.only('Reflection', function(t) {
-  t.plan(27)
+test('Reflection', function(t) {
+  t.plan(34)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const testDir = '/tmp/reflectionTest'
   const vault = new HyperVault(pair.publicKey, testDir, pair.secretKey)
@@ -128,6 +128,35 @@ test.only('Reflection', function(t) {
   function setup(err) {
     t.error(err)
     t.equal(fs.existsSync(testDir), false, 'testfolder should not exist')
+    function testBidirectionalEdits(vault) {
+      const vfile = '/EDITME.txt'
+      const file = path.join(testDir, vfile)
+
+      fs.writeFile(file, 'foo bar', err => {
+        t.error(err)
+        vault.reflect(changes => {
+          vault.readFile(vfile, (err, chunk) => {
+            t.error(err)
+            t.equal(chunk.toString('utf8'), 'foo bar')
+            // Simulate remote change
+            vault.writeFile(vfile, 'DEADBEEF', err => {
+              t.error(err)
+              vault.reflect((err, changes) => {
+                t.error(err)
+                t.equal(changes[vfile].action, 'export')
+                // Verify that it got updated.
+                fs.readFile(file, (err,chunk) => {
+                  t.equal(chunk.toString('utf8'), 'DEADBEEF')
+                  t.end()
+                })
+              })
+            })
+          })
+        })
+      })
+    }
+
+
     vault.ready(function(err){
       t.error(err)
       let file = fs.readFileSync('package.json')
@@ -184,7 +213,7 @@ test.only('Reflection', function(t) {
                             vault.reflect((err, changes) => {
                               t.equal(changes['/IMPORTME.md'].action, 'delete', 'Reflect action = delete')
                               t.equal(fs.existsSync(path.join(testDir, 'IMPORTME.md')), false, 'File was removed from folder')
-                              t.end()
+                              testBidirectionalEdits(vault)
                             })
                           })
                         })
