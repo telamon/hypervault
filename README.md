@@ -1,8 +1,8 @@
 HyperVault
 ==========
 
-Hypervault aims to become a personal cloud-storage replacement using p2p
-technology, inspired by TahoeLAFS & the DAT-project.
+Hypervault aims to become a personal cloud-storage replacement using p2p-technology
+and cryptography, inspired by projects TahoeLAFS, the DAT-project & cabal-chat.
 
 Oh, and we also support multiple writers! :>
 
@@ -35,17 +35,25 @@ setting up a dedicated replicator on an untrusted computer.
 
 To share your folder with a trusted party you have two alternatives:
 1. For read-only access; give them your hypervault public-key that was displayed during
-   init. the other party then can use `hypervault init <pubkey> && hypervault
-   repl <pubkey>` to start replicating.
+   init. the other party can then use `hypervault init <path> <pubkey> && hypervault
+   repl <path> <pubkey>` to start replicating.
 
-2. For write access; give them your password. But once the cat is out of the
-   box..
+2. For write access... You currently have to share your password
+   with your friends.
 
 We're making plans on improving the sharing mechanism to make the behaviour
-a bit more natural.
+a bit more natural and without shared secrets.
 
 For more info about design and implementation check out
-[ARCHITECTURE.md](ARCHITECTURE.md)
+~~[ARCHITECTURE.md](ARCHITECTURE.md)~~
+TODO: haven't written it yet, but prepared a couple of pictures in `docs/`
+
+**Not ready for production**
+Also, this the first release, DO NOT store anything sensistive
+or valuable in a hypervault yet as it has neither stabilized nor been audited.
+(Your data might and will get corrupted, but I suspect that we're already by definition more
+secure than dropbox/icloud)
+
 
 
 ## Hypervault API
