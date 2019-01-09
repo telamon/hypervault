@@ -6,6 +6,8 @@ const rm = require('rimraf')
 const path = require('path')
 const RAM = require('random-access-memory')
 const debug = require('debug')('hypervault-test')
+const crypto = require('crypto')
+
 test('folder indexer', t => {
   t.plan(3)
   HyperVault._indexFolder('node_modules/', (err, index) => {
@@ -230,3 +232,21 @@ test('Reflection', function(t) {
   }
 })
 
+test.only('larger file integrity', (t) => {
+  t.plan(5)
+  const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
+  const vault = new HyperVault(pair.publicKey, null, pair.secretKey, {bare: true, storage: RAM})
+  const size = 1024 * 1024 * 40 // 40mb
+  crypto.randomBytes(size, (err, data) => {
+    t.error(err)
+    t.equal(data.length, size)
+    vault.writeFile('file.bin', data, (err) => {
+      t.error(err)
+      vault.readFile('file.bin', (err, output) => {
+        t.equal(output.length, data.length, 'Size should match')
+        t.equal(data.compare(output), 0, 'Input and output matches')
+        t.end()
+      })
+    })
+  })
+})
