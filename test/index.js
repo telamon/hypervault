@@ -232,7 +232,7 @@ test('Reflection', function(t) {
   }
 })
 
-test.only('larger file integrity', (t) => {
+test('larger file integrity', (t) => {
   t.plan(5)
   const pair = HyperVault.passwdPair('telamohn@pm.me', 'supersecret')
   const vault = new HyperVault(pair.publicKey, null, pair.secretKey, {bare: true, storage: RAM})

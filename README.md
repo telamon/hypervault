@@ -88,7 +88,8 @@ Returns a hash representing the virtual file-tree
 
 #### `vault.readdir(path, callback)`
 
-Not implemented yet, use `indexView` and filter non matching keys.
+return a list of files and folders in in given virtual `path`.
+Only non-empty folders are listed.
 
 #### `vault.replicate(opts)`
 

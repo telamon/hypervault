@@ -159,6 +159,10 @@ class HyperVault {
   lstat(name, callback) {
     this.fs.get(name, callback)
   }
+
+  readdir(name, callback) {
+    this.fs.readdir(name, callback)
+  }
 }
 
 // Export class and methods
