@@ -42,20 +42,32 @@ test('readdir', t => {
 })
 
 test.only('lstat', t => {
+  t.plan(21)
   spawnVault((err, vault) => {
     t.error(err)
     // stat file
     vault.lstat('README.md', (err, stat) => {
       t.error(err)
-      // TODO: assert that necessary keys exist
-      // TODO: assert that it is a file
+      checkStat(stat)
+      t.ok(stat.isFile())
       vault.lstat('subfolder', (err, stat) => {
         t.error(err)
-        // TODO: use magic to derive that the 'subfolder' truly exists.
-        // TODO: provide decent 'virtual' stat to enable read/write
+        checkStat(stat)
+        t.ok(stat.isDirectory())
+        t.end()
       })
     })
   })
+  function checkStat (stat) {
+    t.ok(stat.mtime)
+    t.ok(stat.atime)
+    t.ok(stat.ctime)
+    t.equal(stat.nlink, 1)
+    t.ok(stat.size)
+    t.ok(stat.mode)
+    t.ok(stat.uid)
+    t.ok(stat.gid)
+  }
 })
 
 test('open & close', t => {

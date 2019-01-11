@@ -156,8 +156,12 @@ class HyperVault {
     this.fs.importFile (name, source, callback)
   }
 
+  get (name, callback) {
+    this.fs.lstat(name, callback)
+  }
+
   lstat(name, callback) {
-    this.fs.get(name, callback)
+    this.fs.lstat(name, callback)
   }
 
   readdir(name, callback) {
